@@ -50,7 +50,9 @@ int splitFile(char * filePath){
 	char LinesArray[MAX_LINES_NBR][MAX_LINE_SIZE];
 
 	fopen_s(&fp, filePath, "r");
-	while (fgets(LinesArray[i], MAX_LINES_NBR, fp));
+	while (fgets(LinesArray[i], MAX_LINE_SIZE, fp) && i < MAX_LINES_NBR){
+		i++;
+	}
 	return filesNbr;
 }
 
