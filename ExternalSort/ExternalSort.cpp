@@ -6,8 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define  MAX_LINE_SIZE 500
-#define  MAX_LINES_NBR 2
 
 
 
@@ -19,7 +17,11 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 	printf("Sortuje plik ze sciezki: %s", argv[1]);
-	splitFile(argv[1]);
+	//splitFile(argv[1]);
+	//TODO debug
+	mergeToFiles("C:\\Users\\Witold\Documents\\Visual Studio 2013\\Projects\\ExternalSort\\Debug\\test_0.txt",
+				 "C:\\Users\\Witold\Documents\\Visual Studio 2013\\Projects\\ExternalSort\\Debug\\test_1.txt",
+		         "C:\\Users\\Witold\Documents\\Visual Studio 2013\\Projects\\ExternalSort\\Debug\\test_10.txt");
 	getchar();
 	return 0;
 }
@@ -31,15 +33,81 @@ int merge(char *baseFilePath, int filesNumber){
 	return 0;
 }
 
-int mergeToFiles(char *filePathIn_1, char *filePathIn_2, char *filePathOut){
+void mergeToFiles(char *filePathIn_1, char *filePathIn_2, char *filePathOut){
 	FILE *fp_in_1, *fp_in_2, *fp_out;
-	char bufferIn_1[MAX_LINE_SIZE], bufferIn_2[MAX_LINE_SIZE], bufferOut[MAX_LINE_SIZE];
+	char bufferIn_1[MAX_LINES_NBR][MAX_LINE_SIZE];
+	char bufferIn_2[MAX_LINES_NBR][MAX_LINE_SIZE];
+	char bufferOut[MAX_LINES_NBR][MAX_LINE_SIZE];
+	int  bufferIn_1_Size = 0, bufferIn_2_Size = 0;
+	int indexIn_1 = 0, indexIn_2 = 0, indexOut = 0;
 	//open files
 	fopen_s(&fp_in_1, filePathIn_1, "r");
 	fopen_s(&fp_in_2, filePathIn_2, "r");
 	fopen_s(&fp_out, filePathOut, "w");
-	//read input to buffers
-
+	while (!feof(fp_in_1) && !feof(fp_in_2)){
+		//read input to buffers
+		if (indexIn_1 >= bufferIn_1_Size){
+			bufferIn_1_Size = fillStringBuffer(bufferIn_1, MAX_LINES_NBR, fp_in_1);
+			indexIn_1 = 0;
+		}
+		if (indexIn_2 >= bufferIn_2_Size){
+			bufferIn_2_Size = fillStringBuffer(bufferIn_2, MAX_LINES_NBR, fp_in_2);
+			indexIn_2 = 0;
+		}
+		// merge buffers
+		while (indexIn_1 < bufferIn_1_Size && indexIn_2 < bufferIn_2_Size){
+			if (strcmp(bufferIn_1[indexIn_1], bufferIn_2[indexIn_2]) <= 0){
+				strcpy_s(bufferOut[indexOut], MAX_LINE_SIZE, bufferIn_1[indexIn_1]);
+				indexIn_1++;
+			}
+			else{
+				strcpy_s(bufferOut[indexOut], MAX_LINE_SIZE, bufferIn_2[indexIn_2]);
+				indexIn_2++;
+			}
+			indexOut++;
+			// if out buffer is full, put it to output file
+			if (indexOut >= MAX_LINES_NBR){
+				putStringBuffer(bufferOut, MAX_LINE_SIZE, fp_out);
+				indexOut = 0;
+			}
+		}
+	}
+	//empty in buffer if any data left
+	while (indexIn_1 < bufferIn_1_Size){
+		strcpy_s(bufferOut[indexOut], MAX_LINE_SIZE, bufferIn_1[indexIn_1]);
+		indexIn_1++;
+		indexOut++;
+		if (indexOut >= MAX_LINES_NBR){
+			putStringBuffer(bufferOut, MAX_LINE_SIZE, fp_out);
+			indexOut = 0;
+		}
+	}
+	//empty in buffer if any data left
+	while (indexIn_2 < bufferIn_2_Size){
+		strcpy_s(bufferOut[indexOut], MAX_LINE_SIZE, bufferIn_2[indexIn_2]);
+		indexIn_2++;
+		indexOut++;
+		if (indexOut >= MAX_LINES_NBR){
+			putStringBuffer(bufferOut, MAX_LINE_SIZE, fp_out);
+			indexOut = 0;
+		}
+	}
+	//empty out buffer
+	if (indexOut > 0)
+		putStringBuffer(bufferOut, indexOut, fp_out);
+	//write rest of file_1 if left
+	while (!feof(fp_in_1)){
+			bufferIn_1_Size = fillStringBuffer(bufferIn_1, MAX_LINES_NBR, fp_in_1);
+			putStringBuffer(bufferIn_1, bufferIn_1_Size, fp_out);
+	}
+	//write rest of file_2 if left
+	while (!feof(fp_in_2)){
+		bufferIn_2_Size = fillStringBuffer(bufferIn_2, MAX_LINES_NBR, fp_in_2);
+		putStringBuffer(bufferIn_2, bufferIn_2_Size, fp_out);
+	}
+	fclose(fp_in_1);
+	fclose(fp_in_2);
+	fclose(fp_out);
 }
 
 int splitFile(char * filePath){
@@ -54,13 +122,7 @@ int splitFile(char * filePath){
 		return 0;
 	while (!feof(fp_in)){
 		//read max chunk of lines
-		i = 0;
-		while (i < MAX_LINES_NBR && !isEOF){
-			if (!fgets(LinesArray[i], MAX_LINE_SIZE - 1, fp_in))
-				isEOF = true;
-			i++;
-		}		
-		numberOfLines = i;
+		numberOfLines = fillStringBuffer(LinesArray, MAX_LINES_NBR, fp_in);
 		// sort lines
 		qsort(LinesArray, numberOfLines, MAX_LINE_SIZE - 1, compare);
 		// create new temporary file name
@@ -70,8 +132,7 @@ int splitFile(char * filePath){
 		fopen_s(&fp_out, newFilePath, "w");
 		if (!fp_out)
 			return filesNbr - 1;
-		for (int i = 0; i < numberOfLines; i++)
-			fputs(LinesArray[i], fp_out);
+		putStringBuffer(LinesArray, numberOfLines, fp_out);
 		fclose(fp_out);
 		filesNbr++;
 	}
@@ -86,3 +147,24 @@ int compare(const void * a, const void * b)
 	return strcmp(ia, ib);
 }
 
+int fillStringBuffer(char buffer[][MAX_LINE_SIZE], const int bufferSize, FILE *fp){
+	bool isEOF = false;
+	int i = 0;
+
+	if (!fp)
+		return -1;
+
+	while (i < bufferSize && !isEOF){
+		if (!fgets(buffer[i], MAX_LINE_SIZE - 1, fp))
+			isEOF = true;
+		i++;
+	}
+	return i;
+}
+
+void putStringBuffer(char buffer[][MAX_LINE_SIZE], const int bufferSize, FILE *fp){
+	if (!fp)
+		return;
+	for (int i = 0; i < bufferSize; i++)
+		fputs(buffer[i], fp);
+}
