@@ -10,27 +10,43 @@
 
 
 int main(int argc, char *argv[])
-{
+{	
 	if (argc < 2){
 		printf("Blêdna ma³a liczba parametrów! [filePath]");
 		getchar();
 		return 1;
 	}
 	printf("Sortuje plik ze sciezki: %s", argv[1]);
-	//splitFile(argv[1]);
-	//TODO debug
-	mergeToFiles("C:\\Users\\Witold\Documents\\Visual Studio 2013\\Projects\\ExternalSort\\Debug\\test_0.txt",
-				 "C:\\Users\\Witold\Documents\\Visual Studio 2013\\Projects\\ExternalSort\\Debug\\test_1.txt",
-		         "C:\\Users\\Witold\Documents\\Visual Studio 2013\\Projects\\ExternalSort\\Debug\\test_10.txt");
-	getchar();
+	merge(argv[1],splitFile(argv[1]));
 	return 0;
 }
 
-int merge(char *baseFilePath, int filesNumber){
+void merge(char *baseFilePath, int filesNumber){
 	int mergedFileIndex_1 = 0, mergedFileIndex_2 = 1;
-	char tempFilePath_1[100], tempFilePath_2[100];
-	for (int i = 0; i + 1 < filesNumber; i++);
-	return 0;
+	int filesLeftToMerge = filesNumber;
+	char filePathNoExtention[100], filePathIn_1[100], filePathIn_2[100], filePathOut[100];
+	// init base file path without extention
+	strncpy_s(filePathNoExtention, baseFilePath, strlen(baseFilePath) - 4);
+	while (filesLeftToMerge > 1){
+		// build in filepaths
+		sprintf_s(filePathIn_1, "%s_%d.txt", filePathNoExtention, mergedFileIndex_1);
+		sprintf_s(filePathIn_2, "%s_%d.txt", filePathNoExtention, mergedFileIndex_2);
+		// build out filepath
+		sprintf_s(filePathOut, "%s_%d.txt", filePathNoExtention, filesNumber++);
+		// merge files
+		mergeToFiles(filePathIn_1, filePathIn_2, filePathOut);
+		filesLeftToMerge--;
+		mergedFileIndex_1 += 2;
+		mergedFileIndex_2 += 2;
+		// remove merged files
+		remove(filePathIn_1);
+		remove(filePathIn_2);
+	}
+	// rename result file
+	sprintf_s(filePathIn_1, "%s_%s.txt", filePathNoExtention, "sorted");
+	if(rename(filePathOut, filePathIn_1));
+		printf("Nie mo¿na zmieniæ nazwy pliku wynikowego: %s", filePathOut);
+	return;
 }
 
 void mergeToFiles(char *filePathIn_1, char *filePathIn_2, char *filePathOut){
@@ -67,7 +83,7 @@ void mergeToFiles(char *filePathIn_1, char *filePathIn_2, char *filePathOut){
 			indexOut++;
 			// if out buffer is full, put it to output file
 			if (indexOut >= MAX_LINES_NBR){
-				putStringBuffer(bufferOut, MAX_LINE_SIZE, fp_out);
+				putStringBuffer(bufferOut, MAX_LINES_NBR, fp_out);
 				indexOut = 0;
 			}
 		}
@@ -78,7 +94,7 @@ void mergeToFiles(char *filePathIn_1, char *filePathIn_2, char *filePathOut){
 		indexIn_1++;
 		indexOut++;
 		if (indexOut >= MAX_LINES_NBR){
-			putStringBuffer(bufferOut, MAX_LINE_SIZE, fp_out);
+			putStringBuffer(bufferOut, MAX_LINES_NBR, fp_out);
 			indexOut = 0;
 		}
 	}
@@ -88,7 +104,7 @@ void mergeToFiles(char *filePathIn_1, char *filePathIn_2, char *filePathOut){
 		indexIn_2++;
 		indexOut++;
 		if (indexOut >= MAX_LINES_NBR){
-			putStringBuffer(bufferOut, MAX_LINE_SIZE, fp_out);
+			putStringBuffer(bufferOut, MAX_LINES_NBR, fp_out);
 			indexOut = 0;
 		}
 	}
@@ -97,13 +113,15 @@ void mergeToFiles(char *filePathIn_1, char *filePathIn_2, char *filePathOut){
 		putStringBuffer(bufferOut, indexOut, fp_out);
 	//write rest of file_1 if left
 	while (!feof(fp_in_1)){
-			bufferIn_1_Size = fillStringBuffer(bufferIn_1, MAX_LINES_NBR, fp_in_1);
+		bufferIn_1_Size = fillStringBuffer(bufferIn_1, MAX_LINES_NBR, fp_in_1);
+		if (bufferIn_1_Size > 0)
 			putStringBuffer(bufferIn_1, bufferIn_1_Size, fp_out);
 	}
 	//write rest of file_2 if left
 	while (!feof(fp_in_2)){
 		bufferIn_2_Size = fillStringBuffer(bufferIn_2, MAX_LINES_NBR, fp_in_2);
-		putStringBuffer(bufferIn_2, bufferIn_2_Size, fp_out);
+		if (bufferIn_2_Size > 0)
+			putStringBuffer(bufferIn_2, bufferIn_2_Size, fp_out);
 	}
 	fclose(fp_in_1);
 	fclose(fp_in_2);
@@ -123,18 +141,20 @@ int splitFile(char * filePath){
 	while (!feof(fp_in)){
 		//read max chunk of lines
 		numberOfLines = fillStringBuffer(LinesArray, MAX_LINES_NBR, fp_in);
-		// sort lines
-		qsort(LinesArray, numberOfLines, MAX_LINE_SIZE - 1, compare);
-		// create new temporary file name
-		strncpy_s(newFilePath, filePath, strlen(filePath) - 4);
-		sprintf_s(newFilePath, "%s_%d.txt", newFilePath, filesNbr);
-		//open out file and write sorted lines
-		fopen_s(&fp_out, newFilePath, "w");
-		if (!fp_out)
-			return filesNbr - 1;
-		putStringBuffer(LinesArray, numberOfLines, fp_out);
-		fclose(fp_out);
-		filesNbr++;
+		if (numberOfLines > 0){
+			// sort lines
+			qsort(LinesArray, numberOfLines, MAX_LINE_SIZE, compare);
+			// create new temporary file name
+			strncpy_s(newFilePath, filePath, strlen(filePath) - 4);
+			sprintf_s(newFilePath, "%s_%d.txt", newFilePath, filesNbr);
+			//open out file and write sorted lines
+			fopen_s(&fp_out, newFilePath, "w");
+			if (!fp_out)
+				return filesNbr - 1;
+			putStringBuffer(LinesArray, numberOfLines, fp_out);
+			fclose(fp_out);
+			filesNbr++;
+		}
 	}
 	fclose(fp_in);
 	return filesNbr;
@@ -157,7 +177,8 @@ int fillStringBuffer(char buffer[][MAX_LINE_SIZE], const int bufferSize, FILE *f
 	while (i < bufferSize && !isEOF){
 		if (!fgets(buffer[i], MAX_LINE_SIZE - 1, fp))
 			isEOF = true;
-		i++;
+		else
+		 i++;
 	}
 	return i;
 }

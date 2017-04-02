@@ -6,10 +6,10 @@
 #endif
 
 #ifndef MAX_LINES_NBR
-#define  MAX_LINES_NBR 2
+#define  MAX_LINES_NBR 20
 #endif
 
-int merge(char *baseFilePath, int fileNumber);
+void merge(char *baseFilePath, int fileNumber);
 void mergeToFiles(char *filePathIn_1, char *filePathIn_2, char *filePathOut);
 int splitFile(char * filePath);
 int compare(const void * a, const void * b);
