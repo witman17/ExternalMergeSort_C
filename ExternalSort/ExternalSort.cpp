@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <omp.h>
 
 
 
@@ -44,7 +45,7 @@ void merge(char *baseFilePath, int filesNumber){
 	}
 	// rename result file
 	sprintf_s(filePathIn_1, "%s_%s.txt", filePathNoExtention, "sorted");
-	if(rename(filePathOut, filePathIn_1));
+	if(rename(filePathOut, filePathIn_1))
 		printf("Nie mo¿na zmieniæ nazwy pliku wynikowego: %s", filePathOut);
 	return;
 }
@@ -158,6 +159,20 @@ int splitFile(char * filePath){
 	}
 	fclose(fp_in);
 	return filesNbr;
+}
+
+void sortParallel(char buffer[][MAX_LINE_SIZE], const int bufferSize){
+	int threadsNumber = omp_get_num_threads();
+	if (threadsNumber > MAX_THREAD_NUMBER)
+		threadsNumber = MAX_THREAD_NUMBER;
+	if (threadsNumber < 2)
+		qsort(buffer, bufferSize, MAX_LINE_SIZE, compare);
+	else
+	{
+		for (int i = 0; i < threadsNumber; i++){
+			
+		}
+	}
 }
 
 int compare(const void * a, const void * b)
