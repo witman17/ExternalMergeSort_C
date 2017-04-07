@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <omp.h>
+#include "Bucket.h"
+#include "Utils.h"
 
 
 
@@ -144,7 +146,7 @@ int splitFile(char * filePath){
 		numberOfLines = fillStringBuffer(LinesArray, MAX_LINES_NBR, fp_in);
 		if (numberOfLines > 0){
 			// sort lines
-			qsort(LinesArray, numberOfLines, MAX_LINE_SIZE, compare);
+			qsort(LinesArray, numberOfLines, MAX_LINE_SIZE, compareStrings);
 			// create new temporary file name
 			strncpy_s(newFilePath, filePath, strlen(filePath) - 4);
 			sprintf_s(newFilePath, "%s_%d.txt", newFilePath, filesNbr);
@@ -161,26 +163,28 @@ int splitFile(char * filePath){
 	return filesNbr;
 }
 
-void sortParallel(char buffer[][MAX_LINE_SIZE], const int bufferSize){
+int parallelBucketSort(char buffer[][MAX_LINE_SIZE], const int bufferSize){
 	int threadsNumber = omp_get_num_threads();
+	int bucketPivot;
+	char asciiArray[ASCII_TAB_SIZE];
 	if (threadsNumber > MAX_THREAD_NUMBER)
 		threadsNumber = MAX_THREAD_NUMBER;
 	if (threadsNumber < 2)
-		qsort(buffer, bufferSize, MAX_LINE_SIZE, compare);
+		qsort(buffer, bufferSize, MAX_LINE_SIZE, compareStrings);
 	else
 	{
+		bucketPivot = ASCII_TAB_SIZE / threadsNumber;
+		bucket *buckets = (bucket *)malloc(threadsNumber * sizeof(bucket));
+		if (!buckets)
+			return 1;
 		for (int i = 0; i < threadsNumber; i++){
 			
 		}
 	}
+	return 0;
 }
 
-int compare(const void * a, const void * b)
-{
-	const char *ia = (const char *)a;
-	const char *ib = (const char *)b;
-	return strcmp(ia, ib);
-}
+
 
 int fillStringBuffer(char buffer[][MAX_LINE_SIZE], const int bufferSize, FILE *fp){
 	bool isEOF = false;
