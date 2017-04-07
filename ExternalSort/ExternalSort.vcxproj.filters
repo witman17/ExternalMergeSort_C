@@ -27,10 +27,10 @@
     <ClInclude Include="ExternalSort.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Bucket.h">
+    <ClInclude Include="Utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Utils.h">
+    <ClInclude Include="Bucket.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -41,10 +41,10 @@
     <ClCompile Include="ExternalSort.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Bucket.cpp">
+    <ClCompile Include="Utils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Utils.cpp">
+    <ClCompile Include="Bucket.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

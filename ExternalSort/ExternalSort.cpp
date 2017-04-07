@@ -163,23 +163,34 @@ int splitFile(char * filePath){
 	return filesNbr;
 }
 
-int parallelBucketSort(char buffer[][MAX_LINE_SIZE], const int bufferSize){
+int parrallelInternalMergeSort(char buffer[][MAX_LINE_SIZE], const int bufferSize){
 	int threadsNumber = omp_get_num_threads();
-	int bucketPivot;
-	char asciiArray[ASCII_TAB_SIZE];
+	int bucketSize;
 	if (threadsNumber > MAX_THREAD_NUMBER)
 		threadsNumber = MAX_THREAD_NUMBER;
 	if (threadsNumber < 2)
 		qsort(buffer, bufferSize, MAX_LINE_SIZE, compareStrings);
 	else
 	{
-		bucketPivot = ASCII_TAB_SIZE / threadsNumber;
 		bucket *buckets = (bucket *)malloc(threadsNumber * sizeof(bucket));
 		if (!buckets)
 			return 1;
-		for (int i = 0; i < threadsNumber; i++){
-			
+		bucketSize = bufferSize / threadsNumber;
+		// initialize buckets tab
+		for (int i = 0; i < threadsNumber; i++)
+			bucket_init(&buckets[i], MAX_LINE_SIZE, bucketSize);
+		// fill buckets
+		for (int i = 0, int j = 0, int k = 0; i < bufferSize; i++, j++){
+			if (j > bucketSize){
+				j = 0;
+				k++;
+			}
+			bucket_push_back(&buckets[k], buffer[i], MAX_LINE_SIZE);
 		}
+		// sort buckets
+		for (int i = 0; i < threadsNumber; i++)
+			qsort(buckets[i].data, buckets[i].elementsNumber, MAX_LINE_SIZE, compareStrings);
+		
 	}
 	return 0;
 }

@@ -9,12 +9,8 @@
 #define  MAX_LINES_NBR 1000
 #endif
 
-#ifndef ASCII_TAB_SIZE
-#define  ASCII_TAB_SIZE 128
-#endif
-
 #ifndef MAX_THREAD_NUMBER
-#define  MAX_THREAD_NUMBER 64
+#define  MAX_THREAD_NUMBER 100
 #endif
 
 
@@ -23,6 +19,6 @@ void mergeToFiles(char *filePathIn_1, char *filePathIn_2, char *filePathOut);
 int splitFile(char * filePath);
 int fillStringBuffer(char buffer[][MAX_LINE_SIZE], const int bufferSize, FILE *fp);
 void putStringBuffer(char buffer[][MAX_LINE_SIZE], const int bufferSize, FILE *fp);
-int parallelBucketSort(char buffer[][MAX_LINE_SIZE], const int bufferSize);
+int parrallelInternalMergeSort(char buffer[][MAX_LINE_SIZE], const int bufferSize);
 
 #endif 
