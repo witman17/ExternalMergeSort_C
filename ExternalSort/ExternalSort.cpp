@@ -13,23 +13,34 @@
 
 
 int main(int argc, char *argv[])
-{	
+{
+	int maxLineSize = MAX_LINE_SIZE, maxLineNumber = MAX_LINES_NBR;
+	//get params
 	if (argc < 2){
-		printf("Blêdna ma³a liczba parametrów! [filePath]");
+		printf("Bledna liczba parametrów! [filePath]");
 		getchar();
 		return 1;
-	}
+	}//optional params
+	if (argc > 2)
+		maxLineNumber = atoi(argv[2]);
+	if (argc > 3)
+		maxLineSize = atoi(argv[3]);
+	// Sorting
 	printf("Sortuje plik ze sciezki: %s", argv[1]);
-	merge(argv[1],splitFile(argv[1]));
+	merge(argv[1], splitFile(argv[1], maxLineSize, maxLineNumber), maxLineSize, maxLineNumber);
 	return 0;
 }
 
-void merge(char *baseFilePath, int filesNumber){
+void merge(char *baseFilePath, int filesNumber, int maxLineSize, int maxLineNumber){
 	int mergedFileIndex_1 = 0, mergedFileIndex_2 = 1;
 	int filesLeftToMerge = filesNumber;
 	char filePathNoExtention[100], filePathIn_1[100], filePathIn_2[100], filePathOut[100];
 	// init base file path without extention
 	strncpy_s(filePathNoExtention, baseFilePath, strlen(baseFilePath) - 4);
+	// init output file name if only 1 file
+	if (filesLeftToMerge == 1){
+		sprintf_s(filePathOut, "%s_%d.txt", filePathNoExtention, 0);
+	}
 	while (filesLeftToMerge > 1){
 		// build in filepaths
 		sprintf_s(filePathIn_1, "%s_%d.txt", filePathNoExtention, mergedFileIndex_1);
@@ -37,7 +48,7 @@ void merge(char *baseFilePath, int filesNumber){
 		// build out filepath
 		sprintf_s(filePathOut, "%s_%d.txt", filePathNoExtention, filesNumber++);
 		// merge files
-		mergeToFiles(filePathIn_1, filePathIn_2, filePathOut);
+		mergeToFiles(filePathIn_1, filePathIn_2, filePathOut, maxLineSize, maxLineNumber);
 		filesLeftToMerge--;
 		mergedFileIndex_1 += 2;
 		mergedFileIndex_2 += 2;
@@ -47,106 +58,166 @@ void merge(char *baseFilePath, int filesNumber){
 	}
 	// rename result file
 	sprintf_s(filePathIn_1, "%s_%s.txt", filePathNoExtention, "sorted");
-	if(rename(filePathOut, filePathIn_1))
+	if (rename(filePathOut, filePathIn_1))
 		printf("Nie mo¿na zmieniæ nazwy pliku wynikowego: %s", filePathOut);
 	return;
 }
 
-void mergeToFiles(char *filePathIn_1, char *filePathIn_2, char *filePathOut){
+int mergeToFiles(char *filePathIn_1, char *filePathIn_2, char *filePathOut, int maxLineSize, int maxLineNumber){
 	FILE *fp_in_1, *fp_in_2, *fp_out;
-	char bufferIn_1[MAX_LINES_NBR][MAX_LINE_SIZE];
-	char bufferIn_2[MAX_LINES_NBR][MAX_LINE_SIZE];
-	char bufferOut[MAX_LINES_NBR][MAX_LINE_SIZE];
-	int  bufferIn_1_Size = 0, bufferIn_2_Size = 0;
-	int indexIn_1 = 0, indexIn_2 = 0, indexOut = 0;
+	int bufferStartOffset_1, bufferStartOffset_2;
+	bucket bufferIn_1, bufferIn_2, bufferOut;
+	// init buffers
+	if (bucket_init(&bufferIn_1, maxLineSize, maxLineNumber))
+		return 1; // failed
+	if (bucket_init(&bufferIn_2, maxLineSize, maxLineNumber))
+		return 1;
+	if (bucket_init(&bufferOut, maxLineSize, maxLineNumber * 2))
+		return 1;
 	//open files
 	fopen_s(&fp_in_1, filePathIn_1, "r");
 	fopen_s(&fp_in_2, filePathIn_2, "r");
 	fopen_s(&fp_out, filePathOut, "w");
 	while (!feof(fp_in_1) && !feof(fp_in_2)){
 		//read input to buffers
-		if (indexIn_1 >= bufferIn_1_Size){
-			bufferIn_1_Size = fillStringBuffer(bufferIn_1, MAX_LINES_NBR, fp_in_1);
-			indexIn_1 = 0;
+		if (bufferIn_1.elementsNumber == 0){
+			bufferStartOffset_1 = 0;
+			bufferIn_1.elementsNumber = fillStringBuffer(bufferIn_1.data, bufferIn_1.maxElementSize, bufferIn_1.maxCapacity, fp_in_1);
 		}
-		if (indexIn_2 >= bufferIn_2_Size){
-			bufferIn_2_Size = fillStringBuffer(bufferIn_2, MAX_LINES_NBR, fp_in_2);
-			indexIn_2 = 0;
+		if (bufferIn_2.elementsNumber == 0){
+			bufferStartOffset_2 = 0;
+			bufferIn_2.elementsNumber = fillStringBuffer(bufferIn_2.data, bufferIn_2.maxElementSize, bufferIn_2.maxCapacity, fp_in_2);
 		}
 		// merge buffers
-		while (indexIn_1 < bufferIn_1_Size && indexIn_2 < bufferIn_2_Size){
-			if (strcmp(bufferIn_1[indexIn_1], bufferIn_2[indexIn_2]) <= 0){
-				strcpy_s(bufferOut[indexOut], MAX_LINE_SIZE, bufferIn_1[indexIn_1]);
-				indexIn_1++;
+		while (bufferIn_1.elementsNumber > 0 && bufferIn_2.elementsNumber > 0){
+			if (strcmp(bufferIn_1.data[bufferStartOffset_1], bufferIn_2.data[bufferStartOffset_2]) <= 0){
+				bucket_push_back(&bufferOut, bufferIn_1.data[bufferStartOffset_1++], bufferIn_1.maxElementSize);
+				bufferIn_1.elementsNumber--;
 			}
 			else{
-				strcpy_s(bufferOut[indexOut], MAX_LINE_SIZE, bufferIn_2[indexIn_2]);
-				indexIn_2++;
+				bucket_push_back(&bufferOut, bufferIn_2.data[bufferStartOffset_2++], bufferIn_2.maxElementSize);
+				bufferIn_2.elementsNumber--;
 			}
-			indexOut++;
-			// if out buffer is full, put it to output file
-			if (indexOut >= MAX_LINES_NBR){
-				putStringBuffer(bufferOut, MAX_LINES_NBR, fp_out);
-				indexOut = 0;
+			// put output buffer to file
+			if (bufferOut.elementsNumber >= maxLineNumber * 2){
+				putStringBuffer(bufferOut.data, bufferOut.elementsNumber, fp_out);
+				bucket_clear(&bufferOut);
 			}
 		}
 	}
-	//empty in buffer if any data left
-	while (indexIn_1 < bufferIn_1_Size){
-		strcpy_s(bufferOut[indexOut], MAX_LINE_SIZE, bufferIn_1[indexIn_1]);
-		indexIn_1++;
-		indexOut++;
-		if (indexOut >= MAX_LINES_NBR){
-			putStringBuffer(bufferOut, MAX_LINES_NBR, fp_out);
-			indexOut = 0;
+	// check which file ended
+	while (bufferIn_1.elementsNumber > 0 && !feof(fp_in_2)){
+		if (bufferIn_2.elementsNumber == 0){
+			bufferStartOffset_2 = 0;
+			bufferIn_2.elementsNumber = fillStringBuffer(bufferIn_2.data, bufferIn_2.maxElementSize, bufferIn_2.maxCapacity, fp_in_2);
+		}
+		// merge buffers
+		while (bufferIn_1.elementsNumber > 0 && bufferIn_2.elementsNumber > 0){
+			if (strcmp(bufferIn_1.data[bufferStartOffset_1], bufferIn_2.data[bufferStartOffset_2]) <= 0){
+				bucket_push_back(&bufferOut, bufferIn_1.data[bufferStartOffset_1++], bufferIn_1.maxElementSize);
+				bufferIn_1.elementsNumber--;
+			}
+			else{
+				bucket_push_back(&bufferOut, bufferIn_2.data[bufferStartOffset_2++], bufferIn_2.maxElementSize);
+				bufferIn_2.elementsNumber--;
+			}
+			// put output buffer to file
+			if (bufferOut.elementsNumber >= maxLineNumber * 2){
+				putStringBuffer(bufferOut.data, bufferOut.elementsNumber, fp_out);
+				bucket_clear(&bufferOut);
+			}
 		}
 	}
-	//empty in buffer if any data left
-	while (indexIn_2 < bufferIn_2_Size){
-		strcpy_s(bufferOut[indexOut], MAX_LINE_SIZE, bufferIn_2[indexIn_2]);
-		indexIn_2++;
-		indexOut++;
-		if (indexOut >= MAX_LINES_NBR){
-			putStringBuffer(bufferOut, MAX_LINES_NBR, fp_out);
-			indexOut = 0;
+	while (bufferIn_2.elementsNumber > 0 && !feof(fp_in_1)){
+		if (bufferIn_1.elementsNumber == 0){
+			bufferStartOffset_1 = 0;
+			bufferIn_1.elementsNumber = fillStringBuffer(bufferIn_1.data, bufferIn_1.maxElementSize, bufferIn_1.maxCapacity, fp_in_1);
+		}
+		// merge buffers
+		while (bufferIn_1.elementsNumber > 0 && bufferIn_2.elementsNumber > 0){
+			if (strcmp(bufferIn_1.data[bufferStartOffset_1], bufferIn_2.data[bufferStartOffset_2]) <= 0){
+				bucket_push_back(&bufferOut, bufferIn_1.data[bufferStartOffset_1++], bufferIn_1.maxElementSize);
+				bufferIn_1.elementsNumber--;
+			}
+			else{
+				bucket_push_back(&bufferOut, bufferIn_2.data[bufferStartOffset_2++], bufferIn_2.maxElementSize);
+				bufferIn_2.elementsNumber--;
+			}
+			// put output buffer to file
+			if (bufferOut.elementsNumber >= maxLineNumber * 2){
+				putStringBuffer(bufferOut.data, bufferOut.elementsNumber, fp_out);
+				bucket_clear(&bufferOut);
+			}
 		}
 	}
-	//empty out buffer
-	if (indexOut > 0)
-		putStringBuffer(bufferOut, indexOut, fp_out);
+	//empty bufferIn_1 if data left
+	while (bufferIn_1.elementsNumber > 0){
+		bucket_push_back(&bufferOut, bufferIn_1.data[bufferStartOffset_1++], bufferIn_1.maxElementSize);
+		bufferIn_1.elementsNumber--;
+		// put output buffer to file
+		if (bufferOut.elementsNumber >= maxLineNumber * 2){
+			putStringBuffer(bufferOut.data, bufferOut.elementsNumber, fp_out);
+			bucket_clear(&bufferOut);
+		}
+	}
+	//empty bufferIn_2 if data left
+	while (bufferIn_2.elementsNumber > 0){
+		bucket_push_back(&bufferOut, bufferIn_2.data[bufferStartOffset_2++], bufferIn_2.maxElementSize);
+		bufferIn_2.elementsNumber--;
+		// put output buffer to file
+		if (bufferOut.elementsNumber >= maxLineNumber * 2){
+			putStringBuffer(bufferOut.data, bufferOut.elementsNumber, fp_out);
+			bucket_clear(&bufferOut);
+		}
+	}
+	//empty buffer out
+	if (bufferOut.elementsNumber > 0){
+		putStringBuffer(bufferOut.data, bufferOut.elementsNumber, fp_out);
+	}
 	//write rest of file_1 if left
 	while (!feof(fp_in_1)){
-		bufferIn_1_Size = fillStringBuffer(bufferIn_1, MAX_LINES_NBR, fp_in_1);
-		if (bufferIn_1_Size > 0)
-			putStringBuffer(bufferIn_1, bufferIn_1_Size, fp_out);
+		bufferIn_1.elementsNumber = fillStringBuffer(bufferIn_1.data, bufferIn_1.maxElementSize, bufferIn_1.maxCapacity, fp_in_1);
+		if (bufferIn_1.elementsNumber > 0)
+			putStringBuffer(bufferIn_1.data, bufferIn_1.elementsNumber, fp_out);
 	}
 	//write rest of file_2 if left
 	while (!feof(fp_in_2)){
-		bufferIn_2_Size = fillStringBuffer(bufferIn_2, MAX_LINES_NBR, fp_in_2);
-		if (bufferIn_2_Size > 0)
-			putStringBuffer(bufferIn_2, bufferIn_2_Size, fp_out);
+		bufferIn_2.elementsNumber = fillStringBuffer(bufferIn_2.data, bufferIn_2.maxElementSize, bufferIn_2.maxCapacity, fp_in_2);
+		if (bufferIn_2.elementsNumber > 0)
+			putStringBuffer(bufferIn_2.data, bufferIn_2.elementsNumber, fp_out);
 	}
+	// free buckets
+	bucket_erase(&bufferIn_1);
+	bucket_erase(&bufferIn_2);
+	bucket_erase(&bufferOut);
+	//close files
 	fclose(fp_in_1);
 	fclose(fp_in_2);
 	fclose(fp_out);
+	return 0;
 }
 
-int splitFile(char * filePath){
+int splitFile(char * filePath, int maxLineSize, int maxLineNumber){
 	FILE *fp_in, *fp_out;
 	bool isEOF = false;
 	int filesNbr = 0, i = 0, numberOfLines = 0;
 	char newFilePath[500];
-	char LinesArray[MAX_LINES_NBR][MAX_LINE_SIZE];
+	bucket linesBuffer;
 
 	fopen_s(&fp_in, filePath, "r");
 	if (!fp_in)
 		return 0;
+	//init buffer
+	if (bucket_init(&linesBuffer, maxLineSize, maxLineNumber))
+		return 0;
 	while (!feof(fp_in)){
 		//read max chunk of lines
-		numberOfLines = fillStringBuffer(LinesArray, MAX_LINES_NBR, fp_in);
-		if (numberOfLines > 0){
+		linesBuffer.elementsNumber = fillStringBuffer(linesBuffer.data, linesBuffer.maxElementSize, linesBuffer.maxCapacity, fp_in);
+		if (linesBuffer.elementsNumber > 0){
 			// sort lines
-			qsort(LinesArray, numberOfLines, MAX_LINE_SIZE, compareStrings);
+			linesBuffer.data[0];
+			qsort(linesBuffer.data, linesBuffer.elementsNumber, sizeof(char*), compareStrings);
+			linesBuffer.data[0];
 			// create new temporary file name
 			strncpy_s(newFilePath, filePath, strlen(filePath) - 4);
 			sprintf_s(newFilePath, "%s_%d.txt", newFilePath, filesNbr);
@@ -154,68 +225,44 @@ int splitFile(char * filePath){
 			fopen_s(&fp_out, newFilePath, "w");
 			if (!fp_out)
 				return filesNbr - 1;
-			putStringBuffer(LinesArray, numberOfLines, fp_out);
+			putStringBuffer(linesBuffer.data, linesBuffer.elementsNumber, fp_out);
 			fclose(fp_out);
 			filesNbr++;
 		}
 	}
+	bucket_erase(&linesBuffer);
 	fclose(fp_in);
 	return filesNbr;
 }
 
-int parrallelInternalMergeSort(char buffer[][MAX_LINE_SIZE], const int bufferSize){
+int parrallelInternalMergeSort(bucket buffer){
 	int threadsNumber = omp_get_num_threads();
 	int bucketSize;
 	if (threadsNumber > MAX_THREAD_NUMBER)
 		threadsNumber = MAX_THREAD_NUMBER;
 	if (threadsNumber < 2)
-		qsort(buffer, bufferSize, MAX_LINE_SIZE, compareStrings);
+		qsort(buffer.data, buffer.elementsNumber, MAX_LINE_SIZE, compareStrings);
 	else
 	{
 		bucket *buckets = (bucket *)malloc(threadsNumber * sizeof(bucket));
 		if (!buckets)
 			return 1;
-		bucketSize = bufferSize / threadsNumber;
+		bucketSize = buffer.elementsNumber / threadsNumber;
 		// initialize buckets tab
 		for (int i = 0; i < threadsNumber; i++)
-			bucket_init(&buckets[i], MAX_LINE_SIZE, bucketSize);
+			bucket_init(&buckets[i], buffer.maxElementSize, bucketSize);
 		// fill buckets
-		for (int i = 0, int j = 0, int k = 0; i < bufferSize; i++, j++){
+		for (int i = 0, j = 0, k = 0; i < buffer.elementsNumber; i++, j++){
 			if (j > bucketSize){
 				j = 0;
 				k++;
 			}
-			bucket_push_back(&buckets[k], buffer[i], MAX_LINE_SIZE);
+			bucket_push_back(&buckets[k], buffer.data[i], buffer.maxElementSize);
 		}
 		// sort buckets
 		for (int i = 0; i < threadsNumber; i++)
-			qsort(buckets[i].data, buckets[i].elementsNumber, MAX_LINE_SIZE, compareStrings);
-		
+			qsort(buckets[i].data, buckets[i].elementsNumber, buffer.maxElementSize, compareStrings);
+
 	}
 	return 0;
-}
-
-
-
-int fillStringBuffer(char buffer[][MAX_LINE_SIZE], const int bufferSize, FILE *fp){
-	bool isEOF = false;
-	int i = 0;
-
-	if (!fp)
-		return -1;
-
-	while (i < bufferSize && !isEOF){
-		if (!fgets(buffer[i], MAX_LINE_SIZE - 1, fp))
-			isEOF = true;
-		else
-		 i++;
-	}
-	return i;
-}
-
-void putStringBuffer(char buffer[][MAX_LINE_SIZE], const int bufferSize, FILE *fp){
-	if (!fp)
-		return;
-	for (int i = 0; i < bufferSize; i++)
-		fputs(buffer[i], fp);
 }
