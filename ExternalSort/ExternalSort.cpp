@@ -9,6 +9,7 @@
 #include <omp.h>
 #include "Bucket.h"
 #include "Utils.h"
+#include "math.h"
 
 
 
@@ -27,11 +28,14 @@ int main(int argc, char *argv[])
 		maxLineSize = atoi(argv[3]);
 	// Sorting
 	printf("Sortuje plik ze sciezki: %s", argv[1]);
-	merge(argv[1], splitFile(argv[1], maxLineSize, maxLineNumber), maxLineSize, maxLineNumber);
+	if (merge(argv[1], splitFile(argv[1], maxLineSize, maxLineNumber), maxLineSize, maxLineNumber)){
+		printf("Sortowanie nie powiod³o siê");
+		return 1;
+	}
 	return 0;
 }
 
-void merge(char *baseFilePath, int filesNumber, int maxLineSize, int maxLineNumber){
+int merge(char *baseFilePath, int filesNumber, int maxLineSize, int maxLineNumber){
 	int mergedFileIndex_1 = 0, mergedFileIndex_2 = 1;
 	int filesLeftToMerge = filesNumber;
 	char filePathNoExtention[100], filePathIn_1[100], filePathIn_2[100], filePathOut[100];
@@ -48,7 +52,14 @@ void merge(char *baseFilePath, int filesNumber, int maxLineSize, int maxLineNumb
 		// build out filepath
 		sprintf_s(filePathOut, "%s_%d.txt", filePathNoExtention, filesNumber++);
 		// merge files
-		mergeToFiles(filePathIn_1, filePathIn_2, filePathOut, maxLineSize, maxLineNumber);
+		if (mergeToFiles(filePathIn_1, filePathIn_2, filePathOut, maxLineSize, maxLineNumber)){
+			// failed remove temp files
+			for (int i = 0; i < filesLeftToMerge; i++){
+				remove(filePathIn_1);
+				sprintf_s(filePathIn_1, "%s_%d.txt", filePathNoExtention, ++mergedFileIndex_1);
+			}
+			return 1;
+		}
 		filesLeftToMerge--;
 		mergedFileIndex_1 += 2;
 		mergedFileIndex_2 += 2;
@@ -60,7 +71,7 @@ void merge(char *baseFilePath, int filesNumber, int maxLineSize, int maxLineNumb
 	sprintf_s(filePathIn_1, "%s_%s.txt", filePathNoExtention, "sorted");
 	if (rename(filePathOut, filePathIn_1))
 		printf("Nie mo¿na zmieniæ nazwy pliku wynikowego: %s", filePathOut);
-	return;
+	return 0;
 }
 
 int mergeToFiles(char *filePathIn_1, char *filePathIn_2, char *filePathOut, int maxLineSize, int maxLineNumber){
@@ -215,9 +226,8 @@ int splitFile(char * filePath, int maxLineSize, int maxLineNumber){
 		linesBuffer.elementsNumber = fillStringBuffer(linesBuffer.data, linesBuffer.maxElementSize, linesBuffer.maxCapacity, fp_in);
 		if (linesBuffer.elementsNumber > 0){
 			// sort lines
-			linesBuffer.data[0];
-			qsort(linesBuffer.data, linesBuffer.elementsNumber, sizeof(char*), compareStrings);
-			linesBuffer.data[0];
+			//qsort(linesBuffer.data, linesBuffer.elementsNumber, sizeof(char*), compareStrings);
+			parrallelInternalMergeSort(&linesBuffer);
 			// create new temporary file name
 			strncpy_s(newFilePath, filePath, strlen(filePath) - 4);
 			sprintf_s(newFilePath, "%s_%d.txt", newFilePath, filesNbr);
@@ -235,34 +245,61 @@ int splitFile(char * filePath, int maxLineSize, int maxLineNumber){
 	return filesNbr;
 }
 
-int parrallelInternalMergeSort(bucket buffer){
-	int threadsNumber = omp_get_num_threads();
-	int bucketSize;
-	if (threadsNumber > MAX_THREAD_NUMBER)
-		threadsNumber = MAX_THREAD_NUMBER;
+int parrallelInternalMergeSort(bucket *buffer){
+	int threadsNumber = omp_get_num_procs();
+	int bucketSize, outBucketIndex, mergedBucketIndex_1 = 0, mergedBucketIndex_2 = 1, maxBucketArraySize;
+	if (threadsNumber > buffer->elementsNumber)
+		threadsNumber = buffer->elementsNumber;
+	maxBucketArraySize = threadsNumber + 1;
+	outBucketIndex = threadsNumber;
 	if (threadsNumber < 2)
-		qsort(buffer.data, buffer.elementsNumber, MAX_LINE_SIZE, compareStrings);
+		qsort(buffer->data, buffer->elementsNumber, sizeof(char*), compareStrings);
 	else
 	{
-		bucket *buckets = (bucket *)malloc(threadsNumber * sizeof(bucket));
+		bucket *buckets = (bucket *)malloc((maxBucketArraySize)* sizeof(bucket));
 		if (!buckets)
 			return 1;
-		bucketSize = buffer.elementsNumber / threadsNumber;
+		bucketSize = (buffer->elementsNumber / threadsNumber);
+		bucketSize += (int)ceil((double)(buffer->elementsNumber % threadsNumber) / (double)threadsNumber);
 		// initialize buckets tab
-		for (int i = 0; i < threadsNumber; i++)
-			bucket_init(&buckets[i], buffer.maxElementSize, bucketSize);
+		for (int i = 0; i < threadsNumber + 1; i++)
+			if (bucket_init(&buckets[i], buffer->maxElementSize, bucketSize))
+				return 1;
 		// fill buckets
-		for (int i = 0, j = 0, k = 0; i < buffer.elementsNumber; i++, j++){
-			if (j > bucketSize){
+		for (int i = 0, j = 0, k = 0; i < buffer->elementsNumber; i++, j++){
+			if (j >= bucketSize && k < threadsNumber - 1){
 				j = 0;
 				k++;
 			}
-			bucket_push_back(&buckets[k], buffer.data[i], buffer.maxElementSize);
+			bucket_push_back(&buckets[k], buffer->data[i], buffer->maxElementSize);
 		}
 		// sort buckets
 		for (int i = 0; i < threadsNumber; i++)
-			qsort(buckets[i].data, buckets[i].elementsNumber, buffer.maxElementSize, compareStrings);
-
+			qsort(buckets[i].data, buckets[i].elementsNumber, sizeof(char *), compareStrings);
+		//merge buckets
+		while (threadsNumber > 1){
+			int outBucketCapacity;
+			bucket_merge(&buckets[mergedBucketIndex_1], &buckets[mergedBucketIndex_2], &buckets[outBucketIndex]);
+			// erase merged buckets
+			bucket_erase(&buckets[mergedBucketIndex_1]);
+			bucket_erase(&buckets[mergedBucketIndex_2]);
+			//set indexes
+			mergedBucketIndex_1 = (mergedBucketIndex_1 + 2) % maxBucketArraySize;
+			mergedBucketIndex_2 = (mergedBucketIndex_2 + 2) % maxBucketArraySize;
+			if (--threadsNumber > 1)
+				outBucketIndex = (outBucketIndex + 1) % maxBucketArraySize;
+			//check if out bucket is not initialized
+			if (buckets[outBucketIndex].maxCapacity == 0){
+				outBucketCapacity = buckets[mergedBucketIndex_1].elementsNumber + buckets[mergedBucketIndex_2].elementsNumber;
+				bucket_init(&buckets[outBucketIndex], buffer->maxElementSize, outBucketCapacity);
+			}
+		}
+		// copy data
+		bucket_copy(buffer, &buckets[outBucketIndex]);
+		// deallocate  temporary buckets
+		for (int i = 0; i < maxBucketArraySize; i++)
+			bucket_erase(&buckets[i]);
+		free(buckets);
 	}
 	return 0;
 }

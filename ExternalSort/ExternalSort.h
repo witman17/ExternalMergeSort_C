@@ -8,10 +8,10 @@
 #define  MAX_THREAD_NUMBER 100
 
 
-void merge(char *baseFilePath, int filesNumber, int maxLineSize, int maxLineNumber);
+int merge(char *baseFilePath, int filesNumber, int maxLineSize, int maxLineNumber);
 int mergeToFiles(char *filePathIn_1, char *filePathIn_2, char *filePathOut, int maxLineSize, int maxLineNumber);
 
 int splitFile(char * filePath, int maxLineSize, int maxLineNumber);
-int parrallelInternalMergeSort(bucket buffer, const int bufferSize);
+int parrallelInternalMergeSort(bucket *buffer);
 
 #endif 
